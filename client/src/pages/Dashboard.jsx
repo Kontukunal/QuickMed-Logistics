@@ -1,3 +1,4 @@
+// pages/Dashboard.jsx
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
@@ -11,21 +12,27 @@ const Dashboard = () => {
     totalOrders: 0,
     pendingOrders: 0,
     deliveredOrders: 0,
+    totalRevenue: 0,
+    averageOrderValue: 0,
   });
 
   useEffect(() => {
-    fetchOrders();
+    fetchDashboardData();
   }, []);
 
-  const fetchOrders = async () => {
+  const fetchDashboardData = async () => {
     try {
-      const response = await ordersAPI.getAll();
-      const userOrders = response.data.orders.slice(0, 5); // Show only recent 5 orders
+      const ordersResponse = await ordersAPI.getAll({ limit: 5 });
+
+      // Use the response data structure from our backend
+      const responseData = ordersResponse.data;
+      const userOrders = responseData.data ? responseData.data.slice(0, 5) : [];
       setOrders(userOrders);
 
-      // Calculate stats
-      const total = response.data.orders.length;
-      const pending = response.data.orders.filter((order) =>
+      // Calculate stats from orders
+      const allOrders = responseData.data || [];
+      const total = allOrders.length;
+      const pending = allOrders.filter((order) =>
         [
           "pending",
           "confirmed",
@@ -34,17 +41,31 @@ const Dashboard = () => {
           "in_transit",
         ].includes(order.status)
       ).length;
-      const delivered = response.data.orders.filter(
+      const delivered = allOrders.filter(
         (order) => order.status === "delivered"
       ).length;
+      const revenue = allOrders.reduce(
+        (sum, order) => sum + (order.totalAmount || 0),
+        0
+      );
 
       setStats({
         totalOrders: total,
         pendingOrders: pending,
         deliveredOrders: delivered,
+        totalRevenue: revenue,
+        averageOrderValue: total > 0 ? revenue / total : 0,
       });
     } catch (error) {
-      console.error("Error fetching orders:", error);
+      console.error("Error fetching dashboard data:", error);
+      // Set default stats on error
+      setStats({
+        totalOrders: 0,
+        pendingOrders: 0,
+        deliveredOrders: 0,
+        totalRevenue: 0,
+        averageOrderValue: 0,
+      });
     } finally {
       setLoading(false);
     }
@@ -61,6 +82,10 @@ const Dashboard = () => {
       cancelled: "bg-red-100 text-red-800",
     };
     return colors[status] || "bg-gray-100 text-gray-800";
+  };
+
+  const getStatusText = (status) => {
+    return status.replace("_", " ").toUpperCase();
   };
 
   if (loading) {
@@ -85,7 +110,7 @@ const Dashboard = () => {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-blue-500">
             <div className="flex items-center">
               <div className="flex-shrink-0">
@@ -137,6 +162,24 @@ const Dashboard = () => {
               </div>
             </div>
           </div>
+
+          <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-purple-500">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                  <span className="text-purple-600 font-bold">💰</span>
+                </div>
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">
+                  Total Revenue
+                </p>
+                <p className="text-2xl font-bold text-gray-900">
+                  ${stats.totalRevenue.toFixed(2)}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Quick Actions */}
@@ -166,20 +209,28 @@ const Dashboard = () => {
           )}
 
           {user.role === "driver" && (
-            <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200 text-center">
+            <Link
+              to="/orders"
+              className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition duration-300 border border-gray-200 text-center"
+            >
               <div className="text-2xl mb-2">🚗</div>
               <h3 className="font-semibold text-gray-900">My Deliveries</h3>
               <p className="text-sm text-gray-600 mt-1">
                 View assigned deliveries
               </p>
-            </div>
+            </Link>
           )}
 
-          <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200 text-center">
-            <div className="text-2xl mb-2">📞</div>
-            <h3 className="font-semibold text-gray-900">Support</h3>
-            <p className="text-sm text-gray-600 mt-1">Get help 24/7</p>
-          </div>
+          <Link
+            to="/profile"
+            className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition duration-300 border border-gray-200 text-center"
+          >
+            <div className="text-2xl mb-2">👤</div>
+            <h3 className="font-semibold text-gray-900">Profile</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Update your information
+            </p>
+          </Link>
         </div>
 
         {/* Recent Orders */}
@@ -209,6 +260,9 @@ const Dashboard = () => {
                     Date
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Type
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Status
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -223,7 +277,7 @@ const Dashboard = () => {
                 {orders.length === 0 ? (
                   <tr>
                     <td
-                      colSpan="5"
+                      colSpan="6"
                       className="px-6 py-4 text-center text-gray-500"
                     >
                       No orders found
@@ -243,16 +297,21 @@ const Dashboard = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900 capitalize">
+                          {order.orderType}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
                         <span
                           className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(
                             order.status
                           )}`}
                         >
-                          {order.status.replace("_", " ").toUpperCase()}
+                          {getStatusText(order.status)}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        ${order.totalAmount}
+                        ${order.totalAmount?.toFixed(2)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <Link
@@ -269,6 +328,35 @@ const Dashboard = () => {
             </table>
           </div>
         </div>
+
+        {/* Role-specific additional information */}
+        {user.role === "driver" && (
+          <div className="mt-8 bg-white shadow-md rounded-lg p-6">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">
+              Driver Information
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-600">
+                  {user.driverInfo?.totalDeliveries || 0}
+                </div>
+                <div className="text-sm text-gray-600">Total Deliveries</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-green-600">
+                  {user.driverInfo?.rating || 0}/5
+                </div>
+                <div className="text-sm text-gray-600">Rating</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-purple-600">
+                  ${user.driverInfo?.earnings?.toFixed(2) || "0.00"}
+                </div>
+                <div className="text-sm text-gray-600">Total Earnings</div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
