@@ -42,10 +42,7 @@ const inventorySchema = new mongoose.Schema(
       email: String,
     },
     storageRequirements: {
-      temperature: {
-        min: Number,
-        max: Number,
-      },
+      temperature: { min: Number, max: Number },
       humidity: Number,
       specialConditions: String,
     },
@@ -60,42 +57,30 @@ const inventorySchema = new mongoose.Schema(
       bin: String,
     },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
-// Fixed SKU generation - use async properly
-inventorySchema.pre("save", async function (next) {
+// Simplified SKU generation
+inventorySchema.pre("save", function (next) {
   if (this.isNew && !this.sku) {
-    try {
-      // Use countDocuments instead of deprecated count
-      const count = await mongoose.model("Inventory").countDocuments();
-      this.sku = `SKU${Date.now().toString().slice(-6)}${count
-        .toString()
-        .padStart(4, "0")}`;
-    } catch (error) {
-      // Fallback SKU generation if count fails
-      this.sku = `SKU${Date.now().toString().slice(-8)}${Math.random()
-        .toString(36)
-        .substr(2, 4)
-        .toUpperCase()}`;
-    }
+    const timestamp = Date.now().toString().slice(-8);
+    const random = Math.random().toString(36).substr(2, 6).toUpperCase();
+    this.sku = `SKU${timestamp}${random}`;
   }
   next();
 });
 
-// Alternative simpler SKU generation (uncomment if above still has issues)
-// inventorySchema.pre("save", function (next) {
-//   if (this.isNew && !this.sku) {
-//     this.sku = `SKU${Date.now()}${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-//   }
-//   next();
-// });
-
 // Check for low stock
 inventorySchema.methods.isLowStock = function () {
   return this.quantity <= this.reorderLevel;
+};
+
+// Static method for low stock items
+inventorySchema.statics.findLowStock = function () {
+  return this.find({
+    isActive: true,
+    $expr: { $lte: ["$quantity", "$reorderLevel"] },
+  });
 };
 
 module.exports = mongoose.model("Inventory", inventorySchema);

@@ -16,7 +16,7 @@ const Inventory = () => {
     quantity: 0,
     reorderLevel: 10,
     price: 0,
-    unit: "", // Added missing required field
+    unit: "",
     supplier: {
       name: "",
       contact: "",
@@ -36,7 +36,8 @@ const Inventory = () => {
   const fetchInventory = async () => {
     try {
       const response = await inventoryAPI.getAll();
-      setInventory(response.data.inventory);
+      // Updated: Use response.data.data instead of response.data.inventory
+      setInventory(response.data.data || []);
     } catch (error) {
       console.error("Error fetching inventory:", error);
     } finally {
@@ -52,9 +53,9 @@ const Inventory = () => {
         name: newItem.name,
         description: newItem.description,
         category: newItem.category,
-        quantity: newItem.quantity,
-        reorderLevel: newItem.reorderLevel,
-        price: newItem.price,
+        quantity: Number(newItem.quantity),
+        reorderLevel: Number(newItem.reorderLevel),
+        price: Number(newItem.price),
         unit: newItem.unit,
         // Include optional fields only if they have values
         ...(newItem.supplier.name && { supplier: newItem.supplier }),
@@ -63,11 +64,12 @@ const Inventory = () => {
         }),
       };
 
-      console.log("Sending payload:", payload); // Debug log
+      console.log("Sending payload:", payload);
 
       await inventoryAPI.create(payload);
       setShowCreateModal(false);
       fetchInventory();
+
       // Reset form
       setNewItem({
         name: "",
@@ -90,21 +92,10 @@ const Inventory = () => {
       });
     } catch (error) {
       console.error("Error creating inventory item:", error);
-      console.error("Error response:", error.response?.data);
-      console.error("Request payload:", newItem);
 
-      // Show detailed error message
-      const errorData = error.response?.data;
       let errorMessage = "Failed to create inventory item";
-
-      if (errorData?.details) {
-        errorMessage += `: ${errorData.details
-          .map((detail) => detail.message)
-          .join(", ")}`;
-      } else if (errorData?.message) {
-        errorMessage += `: ${errorData.message}`;
-      } else {
-        errorMessage += `: ${error.message}`;
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
       }
 
       alert(errorMessage);
@@ -114,20 +105,25 @@ const Inventory = () => {
   const handleUpdateItem = async (e) => {
     e.preventDefault();
     try {
-      await inventoryAPI.update(selectedItem._id, selectedItem);
+      const payload = {
+        name: selectedItem.name,
+        description: selectedItem.description,
+        category: selectedItem.category,
+        quantity: Number(selectedItem.quantity),
+        reorderLevel: Number(selectedItem.reorderLevel),
+        price: Number(selectedItem.price),
+        unit: selectedItem.unit,
+      };
+
+      await inventoryAPI.update(selectedItem._id, payload);
       setShowEditModal(false);
       fetchInventory();
     } catch (error) {
       console.error("Error updating inventory item:", error);
-      console.error("Error response:", error.response?.data);
 
-      const errorData = error.response?.data;
       let errorMessage = "Failed to update item";
-
-      if (errorData?.message) {
-        errorMessage += `: ${errorData.message}`;
-      } else {
-        errorMessage += `: ${error.message}`;
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
       }
 
       alert(errorMessage);
@@ -189,12 +185,14 @@ const Inventory = () => {
               Manage medical supplies and equipment
             </p>
           </div>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition duration-300"
-          >
-            + Add Item
-          </button>
+          {(user.role === "admin" || user.role === "healthcare_provider") && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition duration-300"
+            >
+              + Add Item
+            </button>
+          )}
         </div>
 
         {/* Inventory Grid */}
@@ -258,23 +256,26 @@ const Inventory = () => {
                     >
                       {stockStatus.text}
                     </span>
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => {
-                          setSelectedItem(item);
-                          setShowEditModal(true);
-                        }}
-                        className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDeleteItem(item._id)}
-                        className="text-red-600 hover:text-red-800 text-sm font-medium"
-                      >
-                        Delete
-                      </button>
-                    </div>
+                    {(user.role === "admin" ||
+                      user.role === "healthcare_provider") && (
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => {
+                            setSelectedItem(item);
+                            setShowEditModal(true);
+                          }}
+                          className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteItem(item._id)}
+                          className="text-red-600 hover:text-red-800 text-sm font-medium"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -305,14 +306,17 @@ const Inventory = () => {
               <p className="mt-1 text-sm text-gray-500">
                 Get started by creating a new inventory item.
               </p>
-              <div className="mt-6">
-                <button
-                  onClick={() => setShowCreateModal(true)}
-                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  + Add Item
-                </button>
-              </div>
+              {(user.role === "admin" ||
+                user.role === "healthcare_provider") && (
+                <div className="mt-6">
+                  <button
+                    onClick={() => setShowCreateModal(true)}
+                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    + Add Item
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -529,79 +533,6 @@ const Inventory = () => {
                         }
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                         placeholder="Email address"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Storage Requirements */}
-                  <div className="mb-4">
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">
-                      Storage Requirements (Optional)
-                    </h3>
-                    <div className="grid grid-cols-2 gap-4 mb-2">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Min Temperature (°C)
-                        </label>
-                        <input
-                          type="number"
-                          value={newItem.storageRequirements.temperature.min}
-                          onChange={(e) =>
-                            setNewItem((prev) => ({
-                              ...prev,
-                              storageRequirements: {
-                                ...prev.storageRequirements,
-                                temperature: {
-                                  ...prev.storageRequirements.temperature,
-                                  min: parseInt(e.target.value) || 0,
-                                },
-                              },
-                            }))
-                          }
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Max Temperature (°C)
-                        </label>
-                        <input
-                          type="number"
-                          value={newItem.storageRequirements.temperature.max}
-                          onChange={(e) =>
-                            setNewItem((prev) => ({
-                              ...prev,
-                              storageRequirements: {
-                                ...prev.storageRequirements,
-                                temperature: {
-                                  ...prev.storageRequirements.temperature,
-                                  max: parseInt(e.target.value) || 25,
-                                },
-                              },
-                            }))
-                          }
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Special Conditions
-                      </label>
-                      <input
-                        type="text"
-                        value={newItem.storageRequirements.specialConditions}
-                        onChange={(e) =>
-                          setNewItem((prev) => ({
-                            ...prev,
-                            storageRequirements: {
-                              ...prev.storageRequirements,
-                              specialConditions: e.target.value,
-                            },
-                          }))
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Any special storage requirements"
                       />
                     </div>
                   </div>

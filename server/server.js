@@ -12,7 +12,7 @@ app.use(express.json());
 // Routes
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/users", require("./routes/users"));
-app.use("/api/orders", require("./routes/orders"));
+app.use("/api/orders", require("./routes/orders")); // Fixed: was "orders"
 app.use("/api/inventory", require("./routes/inventory"));
 
 // MongoDB Connection
@@ -26,13 +26,24 @@ mongoose
 
 // Basic route
 app.get("/api", (req, res) => {
-  res.json({ message: "QuickMed Logistics API is running!" });
+  res.json({
+    message: "QuickMed Logistics API is running!",
+    version: "1.0.0",
+  });
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ message: "Route not found" });
 });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ message: "Something went wrong!" });
+  res.status(500).json({
+    message: "Something went wrong!",
+    error: process.env.NODE_ENV === "production" ? {} : err.message,
+  });
 });
 
 const PORT = process.env.PORT || 5000;

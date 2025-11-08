@@ -1,6 +1,6 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
-const User = require("../models/User");
+const User = require("../models/Users");
 const { auth } = require("../middleware/auth");
 
 const router = express.Router();
@@ -60,12 +60,10 @@ router.post("/register", async (req, res) => {
       },
     });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        message: "Server error during registration",
-        error: error.message,
-      });
+    res.status(500).json({
+      message: "Server error during registration",
+      error: error.message,
+    });
   }
 });
 
