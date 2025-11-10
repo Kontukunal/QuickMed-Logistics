@@ -130,79 +130,29 @@ router.post(
   }
 );
 
-// Get orders based on user role
+// Allow drivers to view all orders
 router.get("/", auth, async (req, res) => {
   try {
-    const { status, page = 1, limit = 10, search } = req.query;
-    let query = {};
+    let query = { isActive: true };
 
-    // Role-based filtering
-    if (
-      req.user.role === "healthcare_provider" ||
-      req.user.role === "customer"
-    ) {
+    // If user is driver, show all orders (same as admin)
+    // If user is hospital, show only their orders
+    if (req.user.role === "healthcare_provider") {
       query.customer = req.user._id;
-    } else if (req.user.role === "driver") {
-      query.assignedDriver = req.user._id;
     }
-
-    // Status filter
-    if (status) {
-      if (status === "active") {
-        query.status = {
-          $in: [
-            "pending",
-            "confirmed",
-            "preparing",
-            "assigned",
-            "picked_up",
-            "in_transit",
-          ],
-        };
-      } else if (status === "completed") {
-        query.status = { $in: ["delivered", "cancelled"] };
-      } else {
-        query.status = status;
-      }
-    }
-
-    // Search filter
-    if (search) {
-      query.$or = [
-        { orderNumber: { $regex: search, $options: "i" } },
-        { "deliveryAddress.city": { $regex: search, $options: "i" } },
-      ];
-    }
-
-    const options = {
-      page: parseInt(page),
-      limit: parseInt(limit),
-      sort: { createdAt: -1 },
-      populate: [
-        { path: "customer", select: "name healthcareFacility" },
-        { path: "assignedDriver", select: "name phone driverInfo" },
-      ],
-    };
+    // Admin and driver can see all orders
 
     const orders = await Order.find(query)
-      .populate("customer", "name healthcareFacility")
-      .populate("assignedDriver", "name phone driverInfo")
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-
-    const total = await Order.countDocuments(query);
+      .populate("customer", "name email phone healthcareFacility")
+      .populate("driver", "name phone driverInfo")
+      .sort({ createdAt: -1 });
 
     res.json({
       success: true,
       data: orders,
-      pagination: {
-        current: page,
-        pages: Math.ceil(total / limit),
-        total,
-      },
     });
   } catch (error) {
+    console.error("Error fetching orders:", error);
     res.status(500).json({
       success: false,
       message: "Server error fetching orders",
@@ -210,6 +160,148 @@ router.get("/", auth, async (req, res) => {
     });
   }
 });
+
+// Driver accepts an order
+router.patch("/:id/accept", auth, async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    // Check if order can be accepted
+    if (order.status !== "pending" && order.status !== "assigned") {
+      return res.status(400).json({
+        success: false,
+        message: "Order cannot be accepted in its current status",
+      });
+    }
+
+    // Assign driver and update status
+    order.driver = req.user._id;
+    order.status = "accepted";
+    order.acceptedAt = new Date();
+
+    await order.save();
+    await order.populate("driver", "name phone driverInfo");
+    await order.populate("customer", "name email phone healthcareFacility");
+
+    res.json({
+      success: true,
+      message: "Order accepted successfully",
+      data: order,
+    });
+  } catch (error) {
+    console.error("Error accepting order:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error accepting order",
+      error: error.message,
+    });
+  }
+});
+
+// Get orders for driver (all hospital orders)
+router.get("/driver/my-orders", auth, authorize("driver"), async (req, res) => {
+  try {
+    const orders = await Order.find({
+      $or: [
+        { status: "pending" },
+        { status: "assigned" },
+        { driver: req.user._id },
+      ],
+    })
+      .populate("customer", "name email phone healthcareFacility")
+      .populate("driver", "name phone")
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      data: orders,
+    });
+  } catch (error) {
+    console.error("Error fetching driver orders:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error fetching driver orders",
+      error: error.message,
+    });
+  }
+});
+
+// Update delivery status
+router.patch(
+  "/:id/delivery-status",
+  auth,
+  authorize("driver"),
+  async (req, res) => {
+    try {
+      const { status } = req.body;
+      const validStatuses = [
+        "picked_up",
+        "in_transit",
+        "delivered",
+        "cancelled",
+      ];
+
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid status provided",
+        });
+      }
+
+      const order = await Order.findById(req.params.id);
+
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          message: "Order not found",
+        });
+      }
+
+      // Check if driver owns this order
+      if (order.driver.toString() !== req.user._id.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: "You can only update orders assigned to you",
+        });
+      }
+
+      order.status = status;
+
+      // Set timestamps based on status
+      if (status === "picked_up") {
+        order.pickedUpAt = new Date();
+      } else if (status === "delivered") {
+        order.deliveredAt = new Date();
+      } else if (status === "cancelled") {
+        order.cancelledAt = new Date();
+      }
+
+      await order.save();
+      await order.populate("driver", "name phone");
+      await order.populate("customer", "name email phone healthcareFacility");
+
+      res.json({
+        success: true,
+        message: `Order status updated to ${status}`,
+        data: order,
+      });
+    } catch (error) {
+      console.error("Error updating delivery status:", error);
+      res.status(500).json({
+        success: false,
+        message: "Server error updating delivery status",
+        error: error.message,
+      });
+    }
+  }
+);
 
 // Get order by ID
 router.get("/:id", auth, async (req, res) => {
@@ -317,7 +409,7 @@ router.patch("/:id/status", auth, async (req, res) => {
   }
 });
 
-// Driver accepts order
+// Driver accepts order (existing route - keeping for compatibility)
 router.patch("/:id/accept", auth, authorize("driver"), async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
