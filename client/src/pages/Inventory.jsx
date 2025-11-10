@@ -94,8 +94,8 @@ const Inventory = () => {
                 Manage medical supplies and equipment
               </p>
             </div>
-            {/* Add New Item Button - Visible to both admin and healthcare_provider */}
-            {(user.role === "admin" || user.role === "healthcare_provider") && (
+            {/* Only admin can add new items - hospital can only view */}
+            {user.role === "admin" && (
               <button
                 onClick={() => setShowAddForm(true)}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center"
@@ -196,7 +196,7 @@ const Inventory = () => {
           </div>
         </div>
 
-        {/* Inventory Stats - Visible to both admin and healthcare_provider */}
+        {/* Inventory Stats - Show for both admin and hospital */}
         {(user.role === "admin" || user.role === "healthcare_provider") && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
             <div className="bg-white rounded-lg shadow-md p-6">
@@ -279,9 +279,8 @@ const Inventory = () => {
               <p className="text-gray-500 text-lg mb-4">
                 No inventory items found
               </p>
-              {/* Add First Item Button - Visible to both admin and healthcare_provider */}
-              {(user.role === "admin" ||
-                user.role === "healthcare_provider") && (
+              {/* Only admin can add first item */}
+              {user.role === "admin" && (
                 <button
                   onClick={() => setShowAddForm(true)}
                   className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
@@ -313,9 +312,8 @@ const Inventory = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
                     </th>
-                    {/* Actions Column - Visible to both admin and healthcare_provider */}
-                    {(user.role === "admin" ||
-                      user.role === "healthcare_provider") && (
+                    {/* Actions Column - Only for admin */}
+                    {user.role === "admin" && (
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Actions
                       </th>
@@ -401,9 +399,8 @@ const Inventory = () => {
                           </span>
                         )}
                       </td>
-                      {/* Action Buttons - Visible to both admin and healthcare_provider */}
-                      {(user.role === "admin" ||
-                        user.role === "healthcare_provider") && (
+                      {/* Action Buttons - Only for admin */}
+                      {user.role === "admin" && (
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <button
                             onClick={() => setEditingItem(item)}
@@ -453,8 +450,8 @@ const Inventory = () => {
           )}
         </div>
 
-        {/* Add/Edit Form Modal */}
-        {(showAddForm || editingItem) && (
+        {/* Add/Edit Form Modal - Only for admin */}
+        {(showAddForm || editingItem) && user.role === "admin" && (
           <InventoryForm
             item={editingItem}
             onClose={() => {

@@ -9,17 +9,26 @@ const OrderDetails = () => {
   const { user } = useAuth();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    loadOrder();
+    loadOrderDetails();
   }, [id]);
 
-  const loadOrder = async () => {
+  const loadOrderDetails = async () => {
     try {
+      setLoading(true);
       const response = await ordersService.getById(id);
-      setOrder(response.data);
+      console.log("Order details response:", response); // Debug log
+
+      if (response.success) {
+        setOrder(response.data);
+      } else {
+        setError(response.message || "Failed to load order details");
+      }
     } catch (error) {
-      console.error("Error loading order:", error);
+      console.error("Error loading order details:", error);
+      setError("Error loading order details. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -41,10 +50,7 @@ const OrderDetails = () => {
   };
 
   const getStatusText = (status) => {
-    return status
-      .split("_")
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(" ");
+    return status ? status.replace("_", " ") : "pending";
   };
 
   if (loading) {
@@ -55,16 +61,58 @@ const OrderDetails = () => {
     );
   }
 
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-8">
+        <div className="max-w-4xl mx-auto px-4">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+            <div className="flex items-center">
+              <svg
+                className="w-6 h-6 text-red-600 mr-3"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <h3 className="text-lg font-medium text-red-800">Error</h3>
+            </div>
+            <p className="mt-2 text-red-700">{error}</p>
+            <button
+              onClick={() => navigate("/orders")}
+              className="mt-4 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md"
+            >
+              Back to Orders
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!order) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">
-            Order Not Found
-          </h2>
-          <Link to="/orders" className="text-blue-600 hover:text-blue-700">
-            Back to Orders
-          </Link>
+      <div className="min-h-screen bg-gray-50 py-8">
+        <div className="max-w-4xl mx-auto px-4">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">
+              Order Not Found
+            </h2>
+            <p className="text-gray-600 mb-6">
+              The order you're looking for doesn't exist.
+            </p>
+            <Link
+              to="/orders"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg"
+            >
+              Back to Orders
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -75,236 +123,231 @@ const OrderDetails = () => {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex justify-between items-start">
+          <div className="flex justify-between items-center">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">
                 Order Details
               </h1>
-              <p className="text-gray-600 mt-2">{order.orderNumber}</p>
+              <p className="text-gray-600">
+                Order #{order.orderNumber || `ORD-${order._id?.slice(-8)}`}
+              </p>
             </div>
             <Link
               to="/orders"
-              className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+              className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md"
             >
               Back to Orders
             </Link>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Order Status */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">
-                Order Status
-              </h2>
-              <div className="flex items-center justify-between">
-                <div>
-                  <span
-                    className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${getStatusColor(
-                      order.status
-                    )}`}
-                  >
-                    {getStatusText(order.status)}
-                  </span>
-                  <p className="text-sm text-gray-600 mt-2">
-                    Created: {new Date(order.createdAt).toLocaleString()}
-                  </p>
-                  {order.actualDelivery && (
-                    <p className="text-sm text-gray-600">
-                      Delivered:{" "}
-                      {new Date(order.actualDelivery).toLocaleString()}
-                    </p>
-                  )}
-                </div>
-                {user.role === "driver" &&
-                  order.assignedDriver?._id === user._id &&
-                  order.status !== "delivered" && (
-                    <div className="space-x-2">
-                      {order.status === "assigned" && (
-                        <button className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
-                          Mark as Picked Up
-                        </button>
-                      )}
-                      {order.status === "picked_up" && (
-                        <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
-                          Start Delivery
-                        </button>
-                      )}
-                      {order.status === "in_transit" && (
-                        <button className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
-                          Mark as Delivered
-                        </button>
-                      )}
-                    </div>
-                  )}
-              </div>
-            </div>
-
-            {/* Order Items */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">
-                Order Items
-              </h2>
-              <div className="space-y-4">
-                {order.items.map((item, index) => (
-                  <div
-                    key={index}
-                    className="flex justify-between items-center py-3 border-b border-gray-200 last:border-b-0"
-                  >
-                    <div>
-                      <p className="font-medium text-gray-900">
-                        {item.productName}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        Quantity: {item.quantity} {item.product?.unit}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium text-gray-900">${item.price}</p>
-                      <p className="text-sm text-gray-600">
-                        Total: ${item.total}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-                <div className="flex justify-between items-center pt-4 border-t border-gray-200">
-                  <p className="text-lg font-bold text-gray-900">
-                    Total Amount
-                  </p>
-                  <p className="text-lg font-bold text-gray-900">
-                    ${order.totalAmount}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Delivery Information */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">
-                Delivery Information
-              </h2>
-              <div className="space-y-2">
-                <p>
-                  <strong>Address:</strong> {order.deliveryAddress.street},{" "}
-                  {order.deliveryAddress.city}, {order.deliveryAddress.state}{" "}
-                  {order.deliveryAddress.zipCode}
-                </p>
-                <p>
-                  <strong>Order Type:</strong> {order.orderType}
-                </p>
-                <p>
-                  <strong>Priority:</strong> {order.priority}
-                </p>
-                {order.specialRequirements && (
-                  <div>
-                    <p>
-                      <strong>Special Requirements:</strong>
-                    </p>
-                    <ul className="list-disc list-inside text-sm text-gray-600 mt-1">
-                      {order.specialRequirements.refrigeration && (
-                        <li>Refrigeration Required</li>
-                      )}
-                      {order.specialRequirements.fragile && (
-                        <li>Fragile Handling</li>
-                      )}
-                      {order.specialRequirements.handlingInstructions && (
-                        <li>
-                          Instructions:{" "}
-                          {order.specialRequirements.handlingInstructions}
-                        </li>
-                      )}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Driver Information */}
-            {order.assignedDriver && (
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">
-                  Driver Information
-                </h2>
+        {/* Order Information */}
+        <div className="bg-white rounded-lg shadow-md overflow-hidden mb-6">
+          <div className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  Order Information
+                </h3>
                 <div className="space-y-3">
-                  <p>
-                    <strong>Name:</strong> {order.assignedDriver.name}
-                  </p>
-                  <p>
-                    <strong>Phone:</strong> {order.assignedDriver.phone}
-                  </p>
-                  <p>
-                    <strong>Vehicle:</strong>{" "}
-                    {order.assignedDriver.driverInfo?.vehicleType}
-                  </p>
-                  <p>
-                    <strong>Status:</strong>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">
+                      Order Number
+                    </label>
+                    <p className="text-sm text-gray-900">
+                      {order.orderNumber || `ORD-${order._id?.slice(-8)}`}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">
+                      Status
+                    </label>
                     <span
-                      className={`ml-2 px-2 py-1 text-xs font-medium rounded-full ${
-                        order.assignedDriver.driverInfo?.isAvailable
-                          ? "bg-green-100 text-green-800"
-                          : "bg-red-100 text-red-800"
-                      }`}
+                      className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(
+                        order.status
+                      )}`}
                     >
-                      {order.assignedDriver.driverInfo?.isAvailable
-                        ? "Available"
-                        : "On Delivery"}
+                      {getStatusText(order.status)}
                     </span>
-                  </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">
+                      Created Date
+                    </label>
+                    <p className="text-sm text-gray-900">
+                      {order.createdAt
+                        ? new Date(order.createdAt).toLocaleDateString()
+                        : "N/A"}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">
+                      Total Amount
+                    </label>
+                    <p className="text-sm font-medium text-gray-900">
+                      $
+                      {order.totalAmount
+                        ? order.totalAmount.toFixed(2)
+                        : "0.00"}
+                    </p>
+                  </div>
                 </div>
               </div>
-            )}
 
-            {/* Tracking History */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">
-                Tracking History
-              </h2>
-              <div className="space-y-4">
-                {order.trackingHistory
-                  .slice()
-                  .reverse()
-                  .map((tracking, index) => (
-                    <div key={index} className="flex items-start space-x-3">
-                      <div className="flex-shrink-0 w-2 h-2 bg-blue-600 rounded-full mt-2"></div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-900">
-                          {tracking.description}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {new Date(tracking.timestamp).toLocaleString()}
-                        </p>
-                        {tracking.note && (
-                          <p className="text-xs text-gray-600 mt-1">
-                            Note: {tracking.note}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  Customer Information
+                </h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">
+                      Customer Name
+                    </label>
+                    <p className="text-sm text-gray-900">
+                      {order.customer?.name ||
+                        order.customer?.healthcareFacility?.name ||
+                        "N/A"}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">
+                      Email
+                    </label>
+                    <p className="text-sm text-gray-900">
+                      {order.customer?.email || "N/A"}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">
+                      Phone
+                    </label>
+                    <p className="text-sm text-gray-900">
+                      {order.customer?.phone || "N/A"}
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
-
-            {/* Admin Actions */}
-            {user.role === "admin" && order.status === "confirmed" && (
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">
-                  Admin Actions
-                </h2>
-                <Link
-                  to={`/order-assignment/${order._id}`}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg text-center block transition-colors"
-                >
-                  Assign Driver
-                </Link>
-              </div>
-            )}
           </div>
         </div>
+
+        {/* Delivery Information */}
+        <div className="bg-white rounded-lg shadow-md overflow-hidden mb-6">
+          <div className="p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Delivery Information
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h4 className="text-md font-medium text-gray-700 mb-2">
+                  Pickup Location
+                </h4>
+                <div className="text-sm text-gray-600">
+                  <p>{order.pickupLocation?.name || "N/A"}</p>
+                  <p>{order.pickupLocation?.address || "N/A"}</p>
+                </div>
+              </div>
+              <div>
+                <h4 className="text-md font-medium text-gray-700 mb-2">
+                  Delivery Location
+                </h4>
+                <div className="text-sm text-gray-600">
+                  <p>{order.deliveryLocation?.name || "N/A"}</p>
+                  <p>{order.deliveryLocation?.address || "N/A"}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Items Information */}
+        {order.items && order.items.length > 0 && (
+          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Order Items
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead>
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Item
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Quantity
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Price
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Total
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {order.items.map((item, index) => (
+                      <tr key={index}>
+                        <td className="px-4 py-3 text-sm text-gray-900">
+                          {item.name || "N/A"}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900">
+                          {item.quantity || 0}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900">
+                          ${item.price ? item.price.toFixed(2) : "0.00"}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900">
+                          $
+                          {((item.quantity || 0) * (item.price || 0)).toFixed(
+                            2
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Driver Information - if assigned */}
+        {order.driver && (
+          <div className="bg-white rounded-lg shadow-md overflow-hidden mt-6">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Driver Information
+              </h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm font-medium text-gray-500">
+                    Driver Name
+                  </label>
+                  <p className="text-sm text-gray-900">
+                    {order.driver.name || "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">
+                    Vehicle Type
+                  </label>
+                  <p className="text-sm text-gray-900">
+                    {order.driver.vehicleType || "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">
+                    Contact
+                  </label>
+                  <p className="text-sm text-gray-900">
+                    {order.driver.phone || "N/A"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
