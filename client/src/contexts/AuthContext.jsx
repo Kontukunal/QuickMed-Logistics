@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from "react";
-import { authAPI } from "../services/api";
+import { authService } from "../services/api";
 
 const AuthContext = createContext();
 
@@ -14,67 +14,110 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState(localStorage.getItem("token"));
 
   useEffect(() => {
+    const token = localStorage.getItem("token");
     if (token) {
-      getUser();
+      authService
+        .getCurrentUser()
+        .then((response) => {
+          if (response.success && response.data) {
+            setUser(response.data.user);
+          }
+        })
+        .catch((error) => {
+          console.error("Auto-login error:", error);
+          localStorage.removeItem("token");
+        })
+        .finally(() => {
+          setLoading(false);
+        });
     } else {
       setLoading(false);
     }
-  }, [token]);
-
-  const getUser = async () => {
-    try {
-      const response = await authAPI.getMe();
-      setUser(response.data.user);
-    } catch (error) {
-      console.error("Get user error:", error);
-      logout();
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, []);
 
   const login = async (email, password) => {
     try {
-      const response = await authAPI.login({ email, password });
-      const { token: newToken, user: userData } = response.data;
+      console.log("Attempting login with:", { email });
+      const response = await authService.login(email, password);
+      console.log("Login response:", response);
 
-      localStorage.setItem("token", newToken);
-      setToken(newToken);
-      setUser(userData);
-
-      return { success: true };
+      if (response.success && response.data) {
+        const { token, user } = response.data;
+        localStorage.setItem("token", token);
+        setUser(user);
+        return { success: true, user };
+      } else if (response.token) {
+        // Alternative response structure
+        const { token, user } = response;
+        localStorage.setItem("token", token);
+        setUser(user);
+        return { success: true, user };
+      } else {
+        throw new Error(response.message || "Login failed");
+      }
     } catch (error) {
+      console.error("Login error details:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
       return {
         success: false,
-        message: error.response?.data?.message || "Login failed",
+        message:
+          error.response?.data?.message || error.message || "Login failed",
       };
     }
   };
 
   const register = async (userData) => {
     try {
-      const response = await authAPI.register(userData);
-      const { token: newToken, user: newUser } = response.data;
+      console.log("Attempting registration with data:", userData);
+      const response = await authService.register(userData);
+      console.log("Registration response:", response);
 
-      localStorage.setItem("token", newToken);
-      setToken(newToken);
-      setUser(newUser);
-
-      return { success: true };
+      if (response.success && response.data) {
+        const { token, user } = response.data;
+        localStorage.setItem("token", token);
+        setUser(user);
+        return { success: true, user };
+      } else if (response.token) {
+        // Alternative response structure
+        const { token, user } = response;
+        localStorage.setItem("token", token);
+        setUser(user);
+        return { success: true, user };
+      } else {
+        throw new Error(response.message || "Registration failed");
+      }
     } catch (error) {
+      console.error("Registration error details:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        dataSent: userData,
+      });
+
+      let errorMessage = "Registration failed. Please try again.";
+
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.data?.errors) {
+        errorMessage = error.response.data.errors.join(", ");
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
       return {
         success: false,
-        message: error.response?.data?.message || "Registration failed",
+        message: errorMessage,
       };
     }
   };
 
   const logout = () => {
     localStorage.removeItem("token");
-    setToken(null);
     setUser(null);
   };
 

@@ -12,7 +12,7 @@ app.use(express.json());
 // Routes
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/users", require("./routes/users"));
-app.use("/api/orders", require("./routes/orders")); // Fixed: was "orders"
+app.use("/api/orders", require("./routes/orders"));
 app.use("/api/inventory", require("./routes/inventory"));
 
 // MongoDB Connection
@@ -29,6 +29,12 @@ app.get("/api", (req, res) => {
   res.json({
     message: "QuickMed Logistics API is running!",
     version: "1.0.0",
+    endpoints: {
+      auth: "/api/auth",
+      users: "/api/users",
+      orders: "/api/orders",
+      inventory: "/api/inventory",
+    },
   });
 });
 

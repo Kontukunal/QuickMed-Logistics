@@ -1,15 +1,9 @@
-// services/api.js
 import axios from "axios";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const API_BASE_URL = "http://localhost:5000/api";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    "Content-Type": "application/json",
-  },
-  timeout: 10000, // Add timeout
 });
 
 // Add token to requests
@@ -26,89 +20,122 @@ api.interceptors.request.use(
   }
 );
 
-// Handle responses and errors
+// Handle response errors
 api.interceptors.response.use(
-  (response) => {
-    // Log successful responses in development
-    if (import.meta.env.DEV) {
-      console.log(
-        `API Success: ${response.config.method?.toUpperCase()} ${
-          response.config.url
-        }`,
-        response.data
-      );
-    }
-    return response;
-  },
+  (response) => response,
   (error) => {
-    console.error("API Error:", {
-      url: error.config?.url,
-      method: error.config?.method,
-      status: error.response?.status,
-      message: error.response?.data?.message || error.message,
-      data: error.response?.data,
-    });
-
-    // Handle specific error cases
     if (error.response?.status === 401) {
       localStorage.removeItem("token");
-      localStorage.removeItem("user");
       window.location.href = "/login";
     }
-
-    if (error.response?.status === 400) {
-      // Return the actual error message from server
-      return Promise.reject(error.response.data);
-    }
-
-    if (error.code === "NETWORK_ERROR" || error.code === "ECONNREFUSED") {
-      console.error("Server is not running or network error");
-      return Promise.reject({
-        success: false,
-        message:
-          "Cannot connect to server. Please make sure the server is running.",
-      });
-    }
-
-    return Promise.reject(error.response?.data || error);
+    return Promise.reject(error);
   }
 );
 
-export const authAPI = {
-  login: (credentials) => api.post("/auth/login", credentials),
-  register: (userData) => api.post("/auth/register", userData),
-  getMe: () => api.get("/auth/me"),
-  changePassword: (passwordData) =>
-    api.put("/auth/change-password", passwordData),
+// Auth Services
+export const authService = {
+  login: async (email, password) => {
+    const response = await api.post("/auth/login", { email, password });
+    return response.data;
+  },
+  register: async (userData) => {
+    const response = await api.post("/auth/register", userData);
+    return response.data;
+  },
+  getCurrentUser: async () => {
+    const response = await api.get("/auth/me");
+    return response.data;
+  },
 };
 
-export const ordersAPI = {
-  getAll: (params = {}) => api.get("/orders", { params }),
-  getById: (id) => api.get(`/orders/${id}`),
-  create: (orderData) => api.post("/orders", orderData),
-  updateStatus: (id, statusData) =>
-    api.patch(`/orders/${id}/status`, statusData),
-  assignDriver: (id, driverData) =>
-    api.patch(`/orders/${id}/assign-driver`, driverData),
-  cancel: (id) => api.patch(`/orders/${id}/cancel`),
-  getStats: () => api.get("/orders/stats/overview"),
+// Orders Services
+export const ordersService = {
+  getAll: async (params = {}) => {
+    const response = await api.get("/orders", { params });
+    return response.data;
+  },
+  getById: async (id) => {
+    const response = await api.get(`/orders/${id}`);
+    return response.data;
+  },
+  create: async (data) => {
+    const response = await api.post("/orders", data);
+    return response.data;
+  },
+  updateStatus: async (id, data) => {
+    const response = await api.patch(`/orders/${id}/status`, data);
+    return response.data;
+  },
+  acceptOrder: async (id) => {
+    const response = await api.patch(`/orders/${id}/accept`);
+    return response.data;
+  },
+  assignDriver: async (id, driverId) => {
+    const response = await api.patch(`/orders/${id}/assign-driver`, {
+      driverId,
+    });
+    return response.data;
+  },
+  getDashboardStats: async () => {
+    const response = await api.get("/orders/stats/dashboard");
+    return response.data;
+  },
 };
 
-export const inventoryAPI = {
-  getAll: (params = {}) => api.get("/inventory", { params }),
-  create: (itemData) => api.post("/inventory", itemData),
-  update: (id, itemData) => api.put(`/inventory/${id}`, itemData),
-  delete: (id) => api.delete(`/inventory/${id}`),
-  getLowStock: () => api.get("/inventory/alerts/low-stock"),
+// Inventory Services
+export const inventoryService = {
+  getAll: async (params = {}) => {
+    const response = await api.get("/inventory", { params });
+    return response.data;
+  },
+  create: async (data) => {
+    const response = await api.post("/inventory", data);
+    return response.data;
+  },
+  update: async (id, data) => {
+    const response = await api.put(`/inventory/${id}`, data);
+    return response.data;
+  },
+  delete: async (id) => {
+    const response = await api.delete(`/inventory/${id}`);
+    return response.data;
+  },
+  getLowStock: async () => {
+    const response = await api.get("/inventory/alerts/low-stock");
+    return response.data;
+  },
 };
 
-export const usersAPI = {
-  getProfile: () => api.get("/users/profile"),
-  updateProfile: (userData) => api.put("/users/profile", userData),
-  updateDriverLocation: (locationData) =>
-    api.patch("/users/driver/location", locationData),
-  getAvailableDrivers: (vehicleType) =>
-    api.get("/users/drivers/available", { params: { vehicleType } }),
+// Users Services
+export const usersService = {
+  getProfile: async () => {
+    const response = await api.get("/users/profile");
+    return response.data;
+  },
+  updateProfile: async (data) => {
+    const response = await api.put("/users/profile", data);
+    return response.data;
+  },
+  updateDriverLocation: async (data) => {
+    const response = await api.patch("/users/driver/location", data);
+    return response.data;
+  },
+  getAvailableDrivers: async () => {
+    const response = await api.get("/users/drivers/available");
+    return response.data;
+  },
+  getAllUsers: async (params = {}) => {
+    const response = await api.get("/users", { params });
+    return response.data;
+  },
+  getDrivers: async () => {
+    const response = await api.get("/users/drivers");
+    return response.data;
+  },
+  getHealthcareProviders: async () => {
+    const response = await api.get("/users/healthcare-providers");
+    return response.data;
+  },
 };
 
 export default api;
