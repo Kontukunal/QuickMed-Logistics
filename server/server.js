@@ -17,11 +17,17 @@ app.use("/api/inventory", require("./routes/inventory"));
 
 // MongoDB Connection
 mongoose
-  .connect(process.env.MONGODB_URI || "mongodb://localhost:27017/quickmed", {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
-  .then(() => console.log("MongoDB connected successfully"))
+  .connect(
+    process.env.MONGODB_URI ||
+      "mongodb+srv://kunalmali20251_db_user:zyxlYDR4wN4GFP3P@cluster0.btqjxgg.mongodb.net/quickmed?appName=Cluster0",
+    {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    }
+  )
+  .then(() =>
+    console.log(`MongoDB connected successfully ${process.env.MONGODB_URI}`)
+  )
   .catch((err) => console.log("MongoDB connection error:", err));
 
 // Basic route
