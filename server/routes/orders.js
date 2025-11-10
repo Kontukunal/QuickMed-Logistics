@@ -130,26 +130,67 @@ router.post(
   }
 );
 
-// Allow drivers to view all orders
+// Get all orders - FIXED VERSION
 router.get("/", auth, async (req, res) => {
   try {
-    let query = { isActive: true };
+    console.log("Fetching orders for user:", {
+      userId: req.user._id,
+      role: req.user.role,
+      email: req.user.email,
+    });
 
-    // If user is driver, show all orders (same as admin)
-    // If user is hospital, show only their orders
-    if (req.user.role === "healthcare_provider") {
+    let query = {};
+
+    // If user is healthcare provider or customer, show only their orders
+    if (
+      req.user.role === "healthcare_provider" ||
+      req.user.role === "customer"
+    ) {
       query.customer = req.user._id;
+      console.log("Filtering orders for customer:", req.user._id);
     }
-    // Admin and driver can see all orders
+    // Admin and driver can see all orders (no additional filter)
+    else if (req.user.role === "admin" || req.user.role === "driver") {
+      console.log("Showing all orders for admin/driver");
+      // No customer filter for admin and driver
+    }
+
+    // Add status filter if provided
+    if (req.query.status && req.query.status !== "all") {
+      query.status = req.query.status;
+      console.log("Applying status filter:", req.query.status);
+    }
+
+    // Pagination
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    console.log("Final query:", query);
 
     const orders = await Order.find(query)
       .populate("customer", "name email phone healthcareFacility")
       .populate("driver", "name phone driverInfo")
-      .sort({ createdAt: -1 });
+      .populate("assignedDriver", "name phone driverInfo")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const total = await Order.countDocuments(query);
+    const pages = Math.ceil(total / limit);
+
+    console.log(`Found ${orders.length} orders out of ${total} total`);
 
     res.json({
       success: true,
       data: orders,
+      pagination: {
+        current: page,
+        pages: pages,
+        total: total,
+        hasNext: page < pages,
+        hasPrev: page > 1,
+      },
     });
   } catch (error) {
     console.error("Error fetching orders:", error);
@@ -161,8 +202,8 @@ router.get("/", auth, async (req, res) => {
   }
 });
 
-// Driver accepts an order
-router.patch("/:id/accept", auth, async (req, res) => {
+// Driver accepts an order - UPDATED VERSION
+router.patch("/:id/accept", auth, authorize("driver"), async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
 
@@ -181,14 +222,51 @@ router.patch("/:id/accept", auth, async (req, res) => {
       });
     }
 
+    // Check if driver is available
+    if (!req.user.driverInfo.isAvailable) {
+      return res.status(400).json({
+        success: false,
+        message: "You are not available for new deliveries",
+      });
+    }
+
+    // Check if order is already assigned to another driver
+    if (
+      order.assignedDriver &&
+      order.assignedDriver.toString() !== req.user._id.toString()
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Order is already assigned to another driver",
+      });
+    }
+
     // Assign driver and update status
-    order.driver = req.user._id;
+    order.assignedDriver = req.user._id;
+    order.driver = req.user._id; // For backward compatibility
     order.status = "accepted";
     order.acceptedAt = new Date();
 
+    // Add to tracking history
+    order.trackingHistory.push({
+      status: "accepted",
+      description: `Order accepted by driver ${req.user.name}`,
+      updatedBy: req.user._id,
+      timestamp: new Date(),
+    });
+
+    // Update driver status
+    const driver = await User.findById(req.user._id);
+    driver.driverInfo.isAvailable = false;
+    driver.driverInfo.currentOrder = order._id;
+    await driver.save();
+
     await order.save();
-    await order.populate("driver", "name phone driverInfo");
+
+    // Populate order before sending response
     await order.populate("customer", "name email phone healthcareFacility");
+    await order.populate("assignedDriver", "name phone driverInfo");
+    await order.populate("driver", "name phone driverInfo");
 
     res.json({
       success: true,
@@ -205,18 +283,13 @@ router.patch("/:id/accept", auth, async (req, res) => {
   }
 });
 
-// Get orders for driver (all hospital orders)
+// Get orders for driver (all orders like admin) - UPDATED
 router.get("/driver/my-orders", auth, authorize("driver"), async (req, res) => {
   try {
-    const orders = await Order.find({
-      $or: [
-        { status: "pending" },
-        { status: "assigned" },
-        { driver: req.user._id },
-      ],
-    })
+    const orders = await Order.find({})
       .populate("customer", "name email phone healthcareFacility")
-      .populate("driver", "name phone")
+      .populate("assignedDriver", "name phone driverInfo")
+      .populate("driver", "name phone driverInfo")
       .sort({ createdAt: -1 });
 
     res.json({
@@ -233,7 +306,7 @@ router.get("/driver/my-orders", auth, authorize("driver"), async (req, res) => {
   }
 });
 
-// Update delivery status
+// Update delivery status - UPDATED
 router.patch(
   "/:id/delivery-status",
   auth,
@@ -265,13 +338,14 @@ router.patch(
       }
 
       // Check if driver owns this order
-      if (order.driver.toString() !== req.user._id.toString()) {
+      if (order.assignedDriver?.toString() !== req.user._id.toString()) {
         return res.status(403).json({
           success: false,
           message: "You can only update orders assigned to you",
         });
       }
 
+      const previousStatus = order.status;
       order.status = status;
 
       // Set timestamps based on status
@@ -279,13 +353,43 @@ router.patch(
         order.pickedUpAt = new Date();
       } else if (status === "delivered") {
         order.deliveredAt = new Date();
+        order.actualDelivery = new Date();
+
+        // Update driver stats and make available
+        const driver = await User.findById(req.user._id);
+        if (driver) {
+          driver.driverInfo.completedDeliveries += 1;
+          driver.driverInfo.totalDeliveries += 1;
+          driver.driverInfo.points += 10;
+          driver.driverInfo.isAvailable = true;
+          driver.driverInfo.currentOrder = null;
+          await driver.save();
+        }
       } else if (status === "cancelled") {
         order.cancelledAt = new Date();
+
+        // Make driver available if order cancelled
+        const driver = await User.findById(req.user._id);
+        if (driver) {
+          driver.driverInfo.isAvailable = true;
+          driver.driverInfo.currentOrder = null;
+          await driver.save();
+        }
       }
 
+      // Add to tracking history
+      order.trackingHistory.push({
+        status: status,
+        description: `Status changed from ${previousStatus} to ${status}`,
+        updatedBy: req.user._id,
+        timestamp: new Date(),
+      });
+
       await order.save();
-      await order.populate("driver", "name phone");
+
+      // Populate order before sending response
       await order.populate("customer", "name email phone healthcareFacility");
+      await order.populate("assignedDriver", "name phone driverInfo");
 
       res.json({
         success: true,
@@ -303,12 +407,13 @@ router.patch(
   }
 );
 
-// Get order by ID
+// Get order by ID - UPDATED
 router.get("/:id", auth, async (req, res) => {
   try {
     const order = await Order.findById(req.params.id)
       .populate("customer", "name healthcareFacility phone")
       .populate("assignedDriver", "name phone driverInfo")
+      .populate("driver", "name phone driverInfo")
       .populate("items.product", "name unit");
 
     if (!order) {
@@ -320,9 +425,9 @@ router.get("/:id", auth, async (req, res) => {
 
     // Check if user has access to this order
     if (
-      req.user.role === "healthcare_provider" ||
-      (req.user.role === "customer" &&
-        order.customer._id.toString() !== req.user._id.toString())
+      (req.user.role === "healthcare_provider" ||
+        req.user.role === "customer") &&
+      order.customer._id.toString() !== req.user._id.toString()
     ) {
       return res.status(403).json({
         success: false,
@@ -343,7 +448,7 @@ router.get("/:id", auth, async (req, res) => {
   }
 });
 
-// Update order status (Admin, Driver for their orders)
+// Update order status (Admin, Driver for their orders) - UPDATED
 router.patch("/:id/status", auth, async (req, res) => {
   try {
     const { status, note } = req.body;
@@ -375,18 +480,20 @@ router.patch("/:id/status", auth, async (req, res) => {
       description: `Status changed from ${previousStatus} to ${status}`,
       updatedBy: req.user._id,
       note: note || "",
+      timestamp: new Date(),
     });
 
     // Handle driver rewards when order is delivered
     if (status === "delivered" && order.assignedDriver) {
       order.actualDelivery = new Date();
+      order.deliveredAt = new Date();
 
       // Update driver stats and reward points
       const driver = await User.findById(order.assignedDriver);
       if (driver) {
         driver.driverInfo.completedDeliveries += 1;
         driver.driverInfo.totalDeliveries += 1;
-        driver.driverInfo.points += 10; // Reward points
+        driver.driverInfo.points += 10;
         driver.driverInfo.isAvailable = true;
         driver.driverInfo.currentOrder = null;
         await driver.save();
@@ -404,66 +511,6 @@ router.patch("/:id/status", auth, async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error updating order status",
-      error: error.message,
-    });
-  }
-});
-
-// Driver accepts order (existing route - keeping for compatibility)
-router.patch("/:id/accept", auth, authorize("driver"), async (req, res) => {
-  try {
-    const order = await Order.findById(req.params.id);
-
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: "Order not found",
-      });
-    }
-
-    if (order.status !== "pending" && order.status !== "confirmed") {
-      return res.status(400).json({
-        success: false,
-        message: "Order cannot be accepted at this stage",
-      });
-    }
-
-    // Check if driver is available
-    if (!req.user.driverInfo.isAvailable) {
-      return res.status(400).json({
-        success: false,
-        message: "You are not available for new deliveries",
-      });
-    }
-
-    // Assign driver to order
-    order.assignedDriver = req.user._id;
-    order.status = "assigned";
-
-    // Add to tracking history
-    order.trackingHistory.push({
-      status: "assigned",
-      description: `Order accepted by driver ${req.user.name}`,
-      updatedBy: req.user._id,
-    });
-
-    // Update driver status
-    const driver = await User.findById(req.user._id);
-    driver.driverInfo.isAvailable = false;
-    driver.driverInfo.currentOrder = order._id;
-    await driver.save();
-
-    await order.save();
-
-    res.json({
-      success: true,
-      message: "Order accepted successfully",
-      data: order,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Server error accepting order",
       error: error.message,
     });
   }
@@ -503,6 +550,7 @@ router.patch(
 
       // Update order
       order.assignedDriver = driverId;
+      order.driver = driverId; // For backward compatibility
       order.status = "assigned";
 
       // Add to tracking history
@@ -510,6 +558,7 @@ router.patch(
         status: "assigned",
         description: `Driver ${driver.name} assigned to order`,
         updatedBy: req.user._id,
+        timestamp: new Date(),
       });
 
       // Update driver
@@ -548,9 +597,9 @@ router.patch("/:id/cancel", auth, async (req, res) => {
 
     // Only customer who placed order or admin can cancel
     if (
-      req.user.role === "healthcare_provider" ||
-      (req.user.role === "customer" &&
-        order.customer.toString() !== req.user._id.toString())
+      (req.user.role === "healthcare_provider" ||
+        req.user.role === "customer") &&
+      order.customer.toString() !== req.user._id.toString()
     ) {
       return res.status(403).json({
         success: false,
@@ -574,12 +623,14 @@ router.patch("/:id/cancel", auth, async (req, res) => {
     }
 
     order.status = "cancelled";
+    order.cancelledAt = new Date();
 
     // Add to tracking history
     order.trackingHistory.push({
       status: "cancelled",
       description: "Order cancelled by customer",
       updatedBy: req.user._id,
+      timestamp: new Date(),
     });
 
     await order.save();
@@ -633,7 +684,7 @@ router.get("/stats/dashboard", auth, async (req, res) => {
         status: { $in: ["pending", "confirmed", "preparing"] },
       });
       const inTransitOrders = await Order.countDocuments({
-        status: { $in: ["assigned", "picked_up", "in_transit"] },
+        status: { $in: ["assigned", "accepted", "picked_up", "in_transit"] },
       });
       const deliveredOrders = await Order.countDocuments({
         status: "delivered",
@@ -658,7 +709,7 @@ router.get("/stats/dashboard", auth, async (req, res) => {
       });
       const inTransitOrders = await Order.countDocuments({
         customer: req.user._id,
-        status: { $in: ["assigned", "picked_up", "in_transit"] },
+        status: { $in: ["assigned", "accepted", "picked_up", "in_transit"] },
       });
       const deliveredOrders = await Order.countDocuments({
         customer: req.user._id,
