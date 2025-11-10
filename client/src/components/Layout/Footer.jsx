@@ -23,9 +23,8 @@ const Footer = () => {
           <div>
             <h4 className="font-semibold mb-4">Contact</h4>
             <ul className="space-y-2 text-gray-300">
-              <li>support@quickmed.com</li>
-              <li>+1 (555) 123-4567</li>
-              <li>24/7 Emergency Line</li>
+              <li>kunalmali20251@gmail.com</li>
+              <li>8180050462</li>
             </ul>
           </div>
           <div>
@@ -33,12 +32,11 @@ const Footer = () => {
             <ul className="space-y-2 text-gray-300">
               <li>Privacy Policy</li>
               <li>Terms of Service</li>
-              <li>HIPAA Compliance</li>
             </ul>
           </div>
         </div>
         <div className="border-t border-gray-700 mt-8 pt-6 text-center text-gray-300">
-          <p>&copy; 2024 QuickMed Logistics. All rights reserved.</p>
+          <p>&copy; 2025 QuickMed by Kunal Mali. All rights reserved.</p>
         </div>
       </div>
     </footer>
