@@ -1,9 +1,18 @@
 import axios from "axios";
 
-const API_BASE_URL = "http://localhost:5000/api";
+// Use direct URL in both development and production
+const API_BASE_URL = "https://quickmed-backend-dyws.onrender.com/api";
+
+console.log('API Base URL:', API_BASE_URL);
 
 const api = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  // These might help with CORS
+  withCredentials: false,
 });
 
 // Add token to requests
@@ -13,6 +22,13 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    
+    // Add CORS headers manually
+    config.headers['Access-Control-Allow-Origin'] = '*';
+    config.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,PATCH,OPTIONS';
+    config.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization';
+    
+    console.log('Making API request to:', config.url);
     return config;
   },
   (error) => {
@@ -22,12 +38,24 @@ api.interceptors.request.use(
 
 // Handle response errors
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log('API Response received:', response.status, response.config.url);
+    return response;
+  },
   (error) => {
+    console.error('API Error:', error);
+    
     if (error.response?.status === 401) {
       localStorage.removeItem("token");
       window.location.href = "/login";
     }
+    
+    // Handle CORS errors specifically
+    if (error.code === 'ERR_NETWORK' || error.message?.includes('CORS')) {
+      console.error('CORS Error Detected');
+      // You can show a user-friendly message here
+    }
+    
     return Promise.reject(error);
   }
 );
@@ -35,8 +63,13 @@ api.interceptors.response.use(
 // Auth Services
 export const authService = {
   login: async (email, password) => {
-    const response = await api.post("/auth/login", { email, password });
-    return response.data;
+    try {
+      const response = await api.post("/auth/login", { email, password });
+      return response.data;
+    } catch (error) {
+      console.error('Login API Error:', error);
+      throw error;
+    }
   },
   register: async (userData) => {
     const response = await api.post("/auth/register", userData);
