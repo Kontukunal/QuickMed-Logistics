@@ -80,6 +80,17 @@ export const ordersService = {
     const response = await api.get("/orders/stats/dashboard");
     return response.data;
   },
+  // Add these new methods for driver operations
+  getDriverOrders: async () => {
+    const response = await api.get("/orders/driver/my-orders");
+    return response.data;
+  },
+  updateDeliveryStatus: async (id, status) => {
+    const response = await api.patch(`/orders/${id}/delivery-status`, {
+      status,
+    });
+    return response.data;
+  },
 };
 
 // Inventory Services

@@ -15,6 +15,12 @@ const orderSchema = new mongoose.Schema(
       required: true,
     },
 
+    // In your Order model
+    driver: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+
     items: [
       {
         product: {
@@ -61,6 +67,7 @@ const orderSchema = new mongoose.Schema(
         "confirmed",
         "preparing",
         "assigned",
+        "accepted",
         "picked_up",
         "in_transit",
         "delivered",
@@ -77,6 +84,12 @@ const orderSchema = new mongoose.Schema(
     },
     estimatedDelivery: Date,
     actualDelivery: Date,
+
+    // ... other fields ...
+    acceptedAt: Date,
+    pickedUpAt: Date,
+    deliveredAt: Date,
+    cancelledAt: Date,
 
     specialRequirements: {
       refrigeration: { type: Boolean, default: false },

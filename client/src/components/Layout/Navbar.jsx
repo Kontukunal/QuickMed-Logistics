@@ -49,6 +49,16 @@ const Navbar = () => {
                   Orders
                 </Link>
 
+                {/* In your Navbar.jsx, inside the user ? section for driver role */}
+                {user.role === "driver" && (
+                  <Link
+                    to="/driver-orders"
+                    className="text-gray-600 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium transition duration-300"
+                  >
+                    My Deliveries
+                  </Link>
+                )}
+
                 {/* In the Navbar component, update the links for admin: */}
                 {(user.role === "admin" ||
                   user.role === "healthcare_provider") && (
@@ -159,6 +169,17 @@ const Navbar = () => {
                   >
                     Orders
                   </Link>
+
+                  {/* In your Navbar.jsx, inside the user ? section for driver role */}
+                  {user.role === "driver" && (
+                    <Link
+                      to="/driver-orders"
+                      className="text-gray-600 hover:text-blue-600 px-3 py-2 rounded-md text-base font-medium"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      My Deliveries
+                    </Link>
+                  )}
 
                   {/* In the Navbar component, update the links for admin: */}
                   {(user.role === "admin" ||
