@@ -16,10 +16,9 @@ const DriverOrders = () => {
   const loadOrders = async () => {
     try {
       setLoading(true);
-      const response = await ordersService.getAll();
-      console.log("All orders:", response.data); // Debug log
-
-      // Show all orders (same as admin sees)
+      // Use the driver-specific endpoint to get all orders
+      const response = await ordersService.getDriverOrders();
+      console.log("Driver orders:", response.data);
       setOrders(response.data || []);
     } catch (error) {
       console.error("Error loading orders:", error);
@@ -37,39 +36,27 @@ const DriverOrders = () => {
       alert("Order accepted successfully!");
     } catch (error) {
       console.error("Error accepting order:", error);
-      alert("Error accepting order. Please try again.");
+      alert(
+        error.response?.data?.message ||
+          "Error accepting order. Please try again."
+      );
     } finally {
       setActionLoading(null);
     }
   };
 
-  const handleCancelOrder = async (orderId) => {
-    if (!window.confirm("Are you sure you want to cancel this delivery?")) {
-      return;
-    }
-
+  const handleUpdateDeliveryStatus = async (orderId, newStatus) => {
     try {
       setActionLoading(orderId);
-      await ordersService.updateStatus(orderId, { status: "cancelled" });
-      await loadOrders(); // Refresh the list
-      alert("Order cancelled successfully!");
-    } catch (error) {
-      console.error("Error cancelling order:", error);
-      alert("Error cancelling order. Please try again.");
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleUpdateStatus = async (orderId, newStatus) => {
-    try {
-      setActionLoading(orderId);
-      await ordersService.updateStatus(orderId, { status: newStatus });
+      await ordersService.updateDeliveryStatus(orderId, newStatus);
       await loadOrders(); // Refresh the list
       alert(`Order status updated to ${newStatus.replace("_", " ")}!`);
     } catch (error) {
       console.error("Error updating order status:", error);
-      alert("Error updating order status. Please try again.");
+      alert(
+        error.response?.data?.message ||
+          "Error updating order status. Please try again."
+      );
     } finally {
       setActionLoading(null);
     }
@@ -89,6 +76,8 @@ const DriverOrders = () => {
         return "bg-yellow-100 text-yellow-800";
       case "assigned":
         return "bg-orange-100 text-orange-800";
+      case "pending":
+        return "bg-gray-100 text-gray-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
@@ -99,26 +88,29 @@ const DriverOrders = () => {
   };
 
   const canAcceptOrder = (order) => {
-    return order.status === "pending" || order.status === "assigned";
-  };
-
-  const canCancelOrder = (order) => {
-    return order.status !== "delivered" && order.status !== "cancelled";
+    return (
+      (order.status === "pending" || order.status === "assigned") &&
+      !order.assignedDriver
+    );
   };
 
   const isMyOrder = (order) => {
-    return order.driver && order.driver._id === user._id;
+    return order.assignedDriver && order.assignedDriver._id === user._id;
   };
 
   const getNextStatus = (currentStatus) => {
     const statusFlow = {
-      pending: ["accepted"],
       accepted: ["picked_up"],
       picked_up: ["in_transit"],
       in_transit: ["delivered"],
-      assigned: ["accepted"],
     };
     return statusFlow[currentStatus] || [];
+  };
+
+  const formatAddress = (address) => {
+    if (!address) return "N/A";
+    const { street, city, state, zipCode } = address;
+    return `${street}, ${city}, ${state} ${zipCode}`;
   };
 
   if (loading) {
@@ -137,15 +129,15 @@ const DriverOrders = () => {
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">
-                My Deliveries
+                Available Deliveries
               </h1>
               <p className="text-gray-600">
-                View and manage all hospital delivery orders
+                View and accept delivery orders from all hospitals
               </p>
             </div>
             <button
               onClick={loadOrders}
-              className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md flex items-center"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md flex items-center"
             >
               <svg
                 className="w-4 h-4 mr-2"
@@ -165,6 +157,38 @@ const DriverOrders = () => {
           </div>
         </div>
 
+        {/* Driver Status */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Driver Status:{" "}
+                <span
+                  className={
+                    user.driverInfo?.isAvailable
+                      ? "text-green-600"
+                      : "text-red-600"
+                  }
+                >
+                  {user.driverInfo?.isAvailable ? "Available" : "On Delivery"}
+                </span>
+              </h3>
+              <p className="text-gray-600">
+                Completed Deliveries:{" "}
+                {user.driverInfo?.completedDeliveries || 0}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-gray-600">
+                Points: {user.driverInfo?.points || 0}
+              </p>
+              <p className="text-sm text-gray-600">
+                Total Deliveries: {user.driverInfo?.totalDeliveries || 0}
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Orders Grid */}
         <div className="grid grid-cols-1 gap-6">
           {orders.length === 0 ? (
@@ -180,14 +204,19 @@ const DriverOrders = () => {
             orders.map((order) => (
               <div
                 key={order._id}
-                className="bg-white rounded-lg shadow-md overflow-hidden border-l-4 border-blue-500"
+                className={`bg-white rounded-lg shadow-md overflow-hidden border-l-4 ${
+                  isMyOrder(order)
+                    ? "border-green-500"
+                    : order.assignedDriver
+                    ? "border-orange-500"
+                    : "border-blue-500"
+                }`}
               >
                 <div className="p-6">
                   <div className="flex justify-between items-start mb-4">
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900">
-                        Order #
-                        {order.orderNumber || `ORD-${order._id?.slice(-8)}`}
+                        Order # {order.orderNumber}
                       </h3>
                       <p className="text-sm text-gray-600">
                         From:{" "}
@@ -195,15 +224,18 @@ const DriverOrders = () => {
                           order.customer?.name ||
                           "Hospital"}
                       </p>
-                      {order.driver && (
+                      <p className="text-sm text-gray-600">
+                        Delivery: {formatAddress(order.deliveryAddress)}
+                      </p>
+                      {order.assignedDriver && (
                         <p
                           className={`text-sm ${
                             isMyOrder(order)
                               ? "text-green-600 font-medium"
-                              : "text-gray-500"
+                              : "text-orange-600"
                           }`}
                         >
-                          Driver: {order.driver.name}{" "}
+                          Driver: {order.assignedDriver.name}{" "}
                           {isMyOrder(order) && "(You)"}
                         </p>
                       )}
@@ -228,50 +260,28 @@ const DriverOrders = () => {
                     </div>
                   </div>
 
-                  {/* Order Details */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">
-                        Pickup Location
-                      </h4>
-                      <p className="text-sm text-gray-600">
-                        {order.pickupLocation?.name || "N/A"}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {order.pickupLocation?.address ||
-                          "Address not specified"}
-                      </p>
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">
-                        Delivery Location
-                      </h4>
-                      <p className="text-sm text-gray-600">
-                        {order.deliveryLocation?.name || "N/A"}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {order.deliveryLocation?.address ||
-                          "Address not specified"}
-                      </p>
-                    </div>
-                  </div>
-
                   {/* Order Items */}
                   {order.items && order.items.length > 0 && (
                     <div className="mb-4">
                       <h4 className="text-sm font-medium text-gray-700 mb-2">
-                        Items
+                        Order Items ({order.items.length})
                       </h4>
-                      <div className="space-y-1">
+                      <div className="space-y-2">
                         {order.items.map((item, index) => (
                           <div
                             key={index}
-                            className="flex justify-between text-sm"
+                            className="flex justify-between text-sm bg-gray-50 p-2 rounded"
                           >
-                            <span className="text-gray-600">{item.name}</span>
+                            <div>
+                              <span className="font-medium text-gray-900">
+                                {item.productName || `Item ${index + 1}`}
+                              </span>
+                              <span className="text-gray-600 ml-2">
+                                (Qty: {item.quantity})
+                              </span>
+                            </div>
                             <span className="text-gray-900">
-                              {item.quantity} x $
-                              {item.price ? item.price.toFixed(2) : "0.00"}
+                              ${item.total ? item.total.toFixed(2) : "0.00"}
                             </span>
                           </div>
                         ))}
@@ -279,13 +289,47 @@ const DriverOrders = () => {
                     </div>
                   )}
 
+                  {/* Special Requirements */}
+                  {order.specialRequirements &&
+                    Object.keys(order.specialRequirements).some(
+                      (key) =>
+                        order.specialRequirements[key] &&
+                        key !== "handlingInstructions"
+                    ) && (
+                      <div className="mb-4">
+                        <h4 className="text-sm font-medium text-gray-700 mb-2">
+                          Special Requirements
+                        </h4>
+                        <div className="flex gap-2">
+                          {order.specialRequirements.refrigeration && (
+                            <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                              ❄️ Refrigeration
+                            </span>
+                          )}
+                          {order.specialRequirements.fragile && (
+                            <span className="inline-flex items-center px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
+                              🧩 Fragile
+                            </span>
+                          )}
+                        </div>
+                        {order.specialRequirements.handlingInstructions && (
+                          <p className="text-sm text-gray-600 mt-1">
+                            {order.specialRequirements.handlingInstructions}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
                   {/* Action Buttons */}
                   <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-200">
-                    {/* Accept Order Button - Show for pending/assigned orders that aren't mine */}
-                    {canAcceptOrder(order) && !isMyOrder(order) && (
+                    {/* Accept Order Button - Show for pending/assigned orders without driver */}
+                    {canAcceptOrder(order) && (
                       <button
                         onClick={() => handleAcceptOrder(order._id)}
-                        disabled={actionLoading === order._id}
+                        disabled={
+                          actionLoading === order._id ||
+                          !user.driverInfo?.isAvailable
+                        }
                         className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white px-4 py-2 rounded-md text-sm font-medium flex items-center"
                       >
                         {actionLoading === order._id ? (
@@ -338,7 +382,7 @@ const DriverOrders = () => {
                         <button
                           key={nextStatus}
                           onClick={() =>
-                            handleUpdateStatus(order._id, nextStatus)
+                            handleUpdateDeliveryStatus(order._id, nextStatus)
                           }
                           disabled={actionLoading === order._id}
                           className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-4 py-2 rounded-md text-sm font-medium"
@@ -349,39 +393,15 @@ const DriverOrders = () => {
                         </button>
                       ))}
 
-                    {/* Cancel Order Button - Show for my orders or pending orders */}
-                    {(isMyOrder(order) || order.status === "pending") &&
-                      canCancelOrder(order) && (
-                        <button
-                          onClick={() => handleCancelOrder(order._id)}
-                          disabled={actionLoading === order._id}
-                          className="bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white px-4 py-2 rounded-md text-sm font-medium flex items-center"
-                        >
-                          {actionLoading === order._id ? (
-                            "Cancelling..."
-                          ) : (
-                            <>
-                              <svg
-                                className="w-4 h-4 mr-2"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M6 18L18 6M6 6l12 12"
-                                />
-                              </svg>
-                              Cancel
-                            </>
-                          )}
-                        </button>
-                      )}
+                    {/* Show assigned to other driver message */}
+                    {order.assignedDriver && !isMyOrder(order) && (
+                      <span className="inline-flex items-center px-3 py-2 text-sm font-medium text-orange-800 bg-orange-100 rounded-md">
+                        Assigned to {order.assignedDriver.name}
+                      </span>
+                    )}
 
-                    {/* Delivered orders show completed message */}
-                    {order.status === "delivered" && (
+                    {/* Show completed message for delivered orders */}
+                    {order.status === "delivered" && isMyOrder(order) && (
                       <span className="inline-flex items-center px-3 py-2 text-sm font-medium text-green-800 bg-green-100 rounded-md">
                         <svg
                           className="w-4 h-4 mr-2"
@@ -399,36 +419,6 @@ const DriverOrders = () => {
                         Delivery Completed
                       </span>
                     )}
-
-                    {/* Cancelled orders show cancelled message */}
-                    {order.status === "cancelled" && (
-                      <span className="inline-flex items-center px-3 py-2 text-sm font-medium text-red-800 bg-red-100 rounded-md">
-                        <svg
-                          className="w-4 h-4 mr-2"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M6 18L18 6M6 6l12 12"
-                          />
-                        </svg>
-                        Delivery Cancelled
-                      </span>
-                    )}
-
-                    {/* Show assigned to other driver message */}
-                    {order.driver &&
-                      !isMyOrder(order) &&
-                      order.status !== "delivered" &&
-                      order.status !== "cancelled" && (
-                        <span className="inline-flex items-center px-3 py-2 text-sm font-medium text-orange-800 bg-orange-100 rounded-md">
-                          Assigned to {order.driver.name}
-                        </span>
-                      )}
                   </div>
 
                   {/* Timeline */}
@@ -451,7 +441,8 @@ const DriverOrders = () => {
                             : ""
                         }`}
                       >
-                        📋 Pending
+                        📋{" "}
+                        {order.status === "assigned" ? "Assigned" : "Pending"}
                       </span>
                       <span>→</span>
                       <span
