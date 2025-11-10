@@ -3,10 +3,14 @@ const bcrypt = require("bcryptjs");
 
 const userSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true, trim: true },
+    name: {
+      type: String,
+      required: [true, "Name is required"],
+      trim: true,
+    },
     email: {
       type: String,
-      required: true,
+      required: [true, "Email is required"],
       unique: true,
       lowercase: true,
       match: [
@@ -14,34 +18,39 @@ const userSchema = new mongoose.Schema(
         "Please enter a valid email",
       ],
     },
-    password: { type: String, required: true, minlength: 6 },
+    password: {
+      type: String,
+      required: [true, "Password is required"],
+      minlength: [6, "Password must be at least 6 characters"],
+    },
     role: {
       type: String,
-      enum: ["admin", "customer", "driver", "healthcare_provider"],
-      default: "customer",
+      enum: {
+        values: ["admin", "healthcare_provider", "driver", "customer"],
+        message:
+          "Role must be one of: admin, healthcare_provider, driver, customer",
+      },
+      required: [true, "Role is required"],
     },
     phone: {
       type: String,
-      required: true,
+      required: [true, "Phone number is required"],
       match: [/^\+?[\d\s\-\(\)]{10,}$/, "Please enter a valid phone number"],
     },
-    address: {
-      street: String,
-      city: String,
-      state: String,
-      zipCode: String,
-      coordinates: { lat: Number, lng: Number },
-    },
-    isActive: { type: Boolean, default: true },
-    lastLogin: Date,
 
-    // Healthcare provider specific fields
+    // Healthcare Provider specific fields
     healthcareFacility: {
       name: String,
-      licenseNumber: String,
-      facilityType: {
+      type: {
         type: String,
-        enum: ["hospital", "clinic", "pharmacy", "laboratory", "other"],
+        enum: ["hospital", "clinic", "pharmacy", "laboratory", "nursing_home"],
+      },
+      licenseNumber: String,
+      address: {
+        street: String,
+        city: String,
+        state: String,
+        zipCode: String,
       },
     },
 
@@ -52,67 +61,61 @@ const userSchema = new mongoose.Schema(
         type: String,
         enum: ["motorcycle", "car", "van", "truck", "refrigerated_van"],
       },
-      vehicleCapacity: { weight: Number, volume: Number },
-      currentLocation: { lat: Number, lng: Number },
+      currentLocation: {
+        lat: { type: Number, default: 0 },
+        lng: { type: Number, default: 0 },
+        address: String,
+      },
       isAvailable: { type: Boolean, default: true },
       rating: { type: Number, default: 0, min: 0, max: 5 },
       totalDeliveries: { type: Number, default: 0 },
       completedDeliveries: { type: Number, default: 0 },
-      earnings: { type: Number, default: 0 },
+      currentOrder: { type: mongoose.Schema.Types.ObjectId, ref: "Order" },
     },
+
+    // Customer specific fields
+    customerInfo: {
+      address: {
+        street: String,
+        city: String,
+        state: String,
+        zipCode: String,
+      },
+    },
+
+    isActive: { type: Boolean, default: true },
+    lastLogin: Date,
   },
   { timestamps: true }
 );
 
-// Hash password before saving
 userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
-  this.password = await bcrypt.hash(this.password, 12);
-  next();
+
+  try {
+    const salt = await bcrypt.genSalt(12);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (error) {
+    next(error);
+  }
 });
 
-// Compare password method
 userSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// Update last login
 userSchema.methods.updateLastLogin = function () {
   this.lastLogin = new Date();
   return this.save();
 };
 
-// Get driver performance stats
-userSchema.methods.getDriverStats = function () {
-  if (this.role !== "driver") return null;
-
-  const completionRate =
-    this.totalDeliveries > 0
-      ? (this.completedDeliveries / this.totalDeliveries) * 100
-      : 0;
-
-  return {
-    totalDeliveries: this.driverInfo.totalDeliveries,
-    completedDeliveries: this.driverInfo.completedDeliveries,
-    completionRate: Math.round(completionRate * 100) / 100,
-    rating: this.driverInfo.rating,
-    earnings: this.driverInfo.earnings,
-  };
-};
-
-// Static method to find available drivers
-userSchema.statics.findAvailableDrivers = function (vehicleType = null) {
-  const query = {
+userSchema.statics.findAvailableDrivers = function () {
+  return this.find({
     role: "driver",
     "driverInfo.isAvailable": true,
     isActive: true,
-  };
-
-  if (vehicleType) {
-    query["driverInfo.vehicleType"] = vehicleType;
-  }
-
-  return this.find(query).select("name driverInfo email phone");
+  }).select("name driverInfo email phone");
 };
 
 module.exports = mongoose.model("User", userSchema);

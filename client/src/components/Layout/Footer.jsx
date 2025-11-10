@@ -1,110 +1,43 @@
 import React from "react";
-import { Link } from "react-router-dom";
 
 const Footer = () => {
   return (
-    <footer className="bg-gray-800 text-white">
-      <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+    <footer className="bg-gray-800 text-white py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-          <div className="col-span-1">
-            <div className="flex items-center space-x-2 mb-4">
-              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                <span className="text-white font-bold text-sm">QM</span>
-              </div>
-              <span className="text-xl font-bold">QuickMed</span>
-            </div>
-            <p className="text-gray-300 text-sm">
-              Delivering healthcare solutions with speed, reliability, and care.
+          <div>
+            <h3 className="text-lg font-bold mb-4">QuickMed</h3>
+            <p className="text-gray-300">
+              Delivering medical supplies with care and precision.
             </p>
           </div>
-
           <div>
-            <h3 className="text-lg font-semibold mb-4">Services</h3>
-            <ul className="space-y-2 text-sm text-gray-300">
-              <li>
-                <Link
-                  to="/"
-                  className="hover:text-blue-400 transition duration-300"
-                >
-                  Medical Delivery
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/"
-                  className="hover:text-blue-400 transition duration-300"
-                >
-                  Emergency Supply
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/"
-                  className="hover:text-blue-400 transition duration-300"
-                >
-                  Inventory Management
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/"
-                  className="hover:text-blue-400 transition duration-300"
-                >
-                  Route Optimization
-                </Link>
-              </li>
+            <h4 className="font-semibold mb-4">Services</h4>
+            <ul className="space-y-2 text-gray-300">
+              <li>Medical Supply Delivery</li>
+              <li>Emergency Logistics</li>
+              <li>Inventory Management</li>
+              <li>Real-time Tracking</li>
             </ul>
           </div>
-
           <div>
-            <h3 className="text-lg font-semibold mb-4">Company</h3>
-            <ul className="space-y-2 text-sm text-gray-300">
-              <li>
-                <Link
-                  to="/"
-                  className="hover:text-blue-400 transition duration-300"
-                >
-                  About Us
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/"
-                  className="hover:text-blue-400 transition duration-300"
-                >
-                  Careers
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/"
-                  className="hover:text-blue-400 transition duration-300"
-                >
-                  Contact
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/"
-                  className="hover:text-blue-400 transition duration-300"
-                >
-                  Privacy Policy
-                </Link>
-              </li>
+            <h4 className="font-semibold mb-4">Contact</h4>
+            <ul className="space-y-2 text-gray-300">
+              <li>support@quickmed.com</li>
+              <li>+1 (555) 123-4567</li>
+              <li>24/7 Emergency Line</li>
             </ul>
           </div>
-
           <div>
-            <h3 className="text-lg font-semibold mb-4">Contact Info</h3>
-            <div className="text-sm text-gray-300 space-y-2">
-              <p>📞 +1 (555) 123-HELP</p>
-              <p>✉️ support@quickmed.com</p>
-              <p>📍 123 Healthcare Ave, Medical City</p>
-            </div>
+            <h4 className="font-semibold mb-4">Legal</h4>
+            <ul className="space-y-2 text-gray-300">
+              <li>Privacy Policy</li>
+              <li>Terms of Service</li>
+              <li>HIPAA Compliance</li>
+            </ul>
           </div>
         </div>
-
-        <div className="border-t border-gray-700 mt-8 pt-8 text-center text-sm text-gray-400">
+        <div className="border-t border-gray-700 mt-8 pt-6 text-center text-gray-300">
           <p>&copy; 2024 QuickMed Logistics. All rights reserved.</p>
         </div>
       </div>

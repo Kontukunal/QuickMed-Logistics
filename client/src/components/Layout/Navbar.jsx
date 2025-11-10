@@ -48,6 +48,8 @@ const Navbar = () => {
                 >
                   Orders
                 </Link>
+
+                {/* In the Navbar component, update the links for admin: */}
                 {(user.role === "admin" ||
                   user.role === "healthcare_provider") && (
                   <Link
@@ -57,6 +59,16 @@ const Navbar = () => {
                     Inventory
                   </Link>
                 )}
+
+                {user.role === "admin" && (
+                  <Link
+                    to="/driver-management"
+                    className="text-gray-600 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium transition duration-300"
+                  >
+                    Drivers
+                  </Link>
+                )}
+
                 <div className="flex items-center space-x-4">
                   <span className="text-sm text-gray-700">
                     Welcome, {user.name}
@@ -147,6 +159,8 @@ const Navbar = () => {
                   >
                     Orders
                   </Link>
+
+                  {/* In the Navbar component, update the links for admin: */}
                   {(user.role === "admin" ||
                     user.role === "healthcare_provider") && (
                     <Link
@@ -157,6 +171,17 @@ const Navbar = () => {
                       Inventory
                     </Link>
                   )}
+
+                  {user.role === "admin" && (
+                    <Link
+                      to="/driver-management"
+                      className="text-gray-600 hover:text-blue-600 px-3 py-2 rounded-md text-base font-medium"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      Drivers
+                    </Link>
+                  )}
+
                   <div className="px-3 py-2 border-t border-gray-200">
                     <span className="text-sm text-gray-700">
                       Welcome, {user.name}

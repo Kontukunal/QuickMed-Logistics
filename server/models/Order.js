@@ -5,14 +5,15 @@ const orderSchema = new mongoose.Schema(
     orderNumber: {
       type: String,
       unique: true,
-      required: false,
+      required: false, // Make it not required, we'll generate it automatically
     },
+
+    // Order placed by healthcare facility or customer
     customer: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
-    healthcareFacility: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
 
     items: [
       {
@@ -28,14 +29,17 @@ const orderSchema = new mongoose.Schema(
       },
     ],
 
-    totalAmount: { type: Number, required: true },
+    totalAmount: {
+      type: Number,
+      required: false, // Make it not required, we'll calculate it
+      default: 0,
+    },
 
     deliveryAddress: {
       street: { type: String, required: true },
       city: { type: String, required: true },
       state: { type: String, required: true },
       zipCode: { type: String, required: true },
-      coordinates: { lat: Number, lng: Number },
     },
 
     orderType: {
@@ -56,7 +60,8 @@ const orderSchema = new mongoose.Schema(
         "pending",
         "confirmed",
         "preparing",
-        "dispatched",
+        "assigned",
+        "picked_up",
         "in_transit",
         "delivered",
         "cancelled",
@@ -65,30 +70,27 @@ const orderSchema = new mongoose.Schema(
     },
 
     scheduledDelivery: Date,
-    assignedDriver: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    assignedDriver: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
     estimatedDelivery: Date,
     actualDelivery: Date,
 
     specialRequirements: {
       refrigeration: { type: Boolean, default: false },
-      temperature: { min: Number, max: Number },
-      fragile: Boolean,
+      fragile: { type: Boolean, default: false },
       handlingInstructions: String,
-    },
-
-    paymentStatus: {
-      type: String,
-      enum: ["pending", "processing", "completed", "failed", "refunded"],
-      default: "pending",
     },
 
     trackingHistory: [
       {
         status: String,
-        location: { lat: Number, lng: Number },
         timestamp: { type: Date, default: Date.now },
         description: String,
         updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        note: String,
       },
     ],
 
@@ -97,24 +99,42 @@ const orderSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Generate unique order number - SIMPLIFIED VERSION
+// Generate unique order number
 orderSchema.pre("save", function (next) {
-  if (this.isNew && !this.orderNumber) {
+  if (this.isNew) {
     const timestamp = Date.now().toString().slice(-8);
     const random = Math.random().toString(36).substring(2, 8).toUpperCase();
-    this.orderNumber = `ORD${timestamp}${random}`;
-    console.log("Generated order number:", this.orderNumber);
+    this.orderNumber = `QM${timestamp}${random}`;
   }
   next();
 });
 
 // Calculate totals before save
 orderSchema.pre("save", function (next) {
-  if (this.isModified("items") && this.items.length > 0) {
+  if (this.items && this.items.length > 0) {
+    // Calculate item totals and overall total
     this.totalAmount = this.items.reduce((total, item) => {
-      item.total = item.price * item.quantity;
-      return total + item.total;
+      // Ensure each item has its total calculated
+      if (item.price && item.quantity) {
+        item.total = item.price * item.quantity;
+        return total + item.total;
+      }
+      return total;
     }, 0);
+  } else {
+    this.totalAmount = 0;
+  }
+  next();
+});
+
+// Add to tracking history when status changes
+orderSchema.pre("save", function (next) {
+  if (this.isModified("status") && !this.isNew) {
+    this.trackingHistory.push({
+      status: this.status,
+      description: `Order status updated to ${this.status}`,
+      timestamp: new Date(),
+    });
   }
   next();
 });
