@@ -180,13 +180,7 @@ const Orders = () => {
           </div>
         </div>
 
-        {/* Debug Info */}
-        <div className="mb-4 p-4 bg-yellow-50 rounded-lg">
-          <p className="text-sm text-yellow-800">
-            <strong>Debug Info:</strong> User Role: {user.role} | Status Filter:{" "}
-            {status} | Page: {page} | Orders Found: {orders.length}
-          </p>
-        </div>
+        
 
         {/* Orders List */}
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
