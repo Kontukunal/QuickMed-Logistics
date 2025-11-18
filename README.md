@@ -8,7 +8,7 @@ Fullstack Application
 
 ## Deployed App
 **Frontend Live Demo:** [https://quickmed-logistics.netlify.app](https://quickmed-logistics.netlify.app)  
-**Backend API:** [https://your-quickmed-api.herokuapp.com](https://your-quickmed-api.herokuapp.com)  
+**Backend API:** [https://quickmed-backend-dyws.onrender.com](https://quickmed-backend-dyws.onrender.com)  
 **Video Demo:** [https://www.youtube.com/watch?v=xBCgZ21iAR8](https://www.youtube.com/watch?v=xBCgZ21iAR8)
 
 ## UI 
