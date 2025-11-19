@@ -7,7 +7,7 @@ QuickMed is an intelligent medical logistics and transportation platform that re
 Fullstack Application
 
 ## Deployed App
-**Frontend Live Demo:** [https://quickmed-logistics.netlify.app](https://quickmed-logistics.netlify.app)  
+**Frontend Live Demo:** [https://quickmed-by-kunal-mali.netlify.app](https://quickmed-by-kunal-mali.netlify.app)  
 **Backend API:** [https://quickmed-backend-dyws.onrender.com](https://quickmed-backend-dyws.onrender.com)  
 **Video Demo:** [https://www.youtube.com/watch?v=xBCgZ21iAR8](https://www.youtube.com/watch?v=xBCgZ21iAR8)
 
